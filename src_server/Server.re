@@ -6,10 +6,12 @@ let dirname =
   | None => Js.Exn.raiseError("Could not get __dirname")
   };
 
-let getRefdomainsJson = () => {
-  Node.Fs.readFileAsUtf8Sync(Node.Path.join([|dirname, "Refdomains.json"|]))
-  |> Js.Json.parseExn;
-};
+let getRefdomains = () =>
+  [|dirname, "refdomains.json"|]
+  ->Node.Path.join
+  ->Node.Fs.readFileAsUtf8Sync
+  ->Js.Json.parseExn
+  ->Refdomains_bs.read_response;
 
 let app = express();
 
@@ -25,7 +27,9 @@ App.useOnPath(
 );
 
 App.get(app, ~path="/refdomains") @@
-Middleware.from((_next, _req) => Response.sendJson(getRefdomainsJson()));
+Middleware.from((_next, _req) =>
+  getRefdomains()->Refdomains_bs.write_response->Response.sendJson
+);
 
 let onListen = err =>
   switch (err) {

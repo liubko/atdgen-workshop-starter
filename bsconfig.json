@@ -3,7 +3,10 @@
   "reason": {
     "react-jsx": 2
   },
-  "sources": ["src_client", "src_server"],
+  "sources": [
+    "src_client",
+    "src_server"
+  ],
   "package-specs": [
     {
       "module": "commonjs",
@@ -12,6 +15,10 @@
   ],
   "suffix": ".bs.js",
   "namespace": true,
-  "bs-dependencies": ["bs-express", "reason-react"],
+  "bs-dependencies": [
+    "@ahrefs/bs-atdgen-codec-runtime",
+    "bs-express",
+    "reason-react"
+  ],
   "refmt": 3
 }

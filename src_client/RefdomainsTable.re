@@ -1,43 +1,79 @@
-/* State declaration */
-type state =
-  | FetchedData
-  | Mounted
-  | NotInitialized;
+open Belt;
 
-/* Action declaration */
+module RR = ReasonReact;
+module P = Js.Promise;
+
+type remoteData('data, 'err) =
+  | NotAsked
+  | Loading
+  | Failure('err)
+  | Success('data);
+
+type state = {refdomains: remoteData(Refdomains_t.response, string)};
+
 type action =
-  | DidMount;
+  | FetchRefdomains
+  | SetRefdomains(remoteData(Refdomains_t.response, string));
 
-/* Component template declaration.
-   Needs to be **after** state and action declarations! */
-let component = ReasonReact.reducerComponent(__MODULE__);
-
-let s = ReasonReact.string;
-
+let component = RR.reducerComponent(__MODULE__);
 let make = _children => {
-  /* spread the other default fields of component here and override a few */
   ...component,
-
-  didMount: self => self.send(DidMount),
-  initialState: () => NotInitialized,
-
-  /* State transitions */
+  initialState: () => {refdomains: NotAsked},
   reducer: (action, _state) =>
     switch (action) {
-    | DidMount =>
-      Js.log("Component did mount. Fetching data from `localhost:8000/refdomains` could be added here.");
-      ReasonReact.Update(Mounted);
+    | FetchRefdomains =>
+      RR.UpdateWithSideEffects(
+        {refdomains: Loading},
+        (
+          self =>
+            Window.fetch("http://127.0.0.1:8000/refdomains")
+            |> P.then_(response => Window.json((), response))
+            |> P.then_(responseJson =>
+                 P.resolve @@
+                 Success(Refdomains_bs.read_response(responseJson))
+               )
+            |> P.catch(err => {
+                 Js.log2("err", err);
+                 P.resolve @@ Failure("Oops smth went wrong");
+               })
+            |> P.then_(refdomains => {
+                 self.send @@ SetRefdomains(refdomains);
+                 P.resolve();
+               })
+            |> ignore
+        ),
+      )
+    | SetRefdomains(refdomains) => RR.Update({refdomains: refdomains})
     },
-
-  render: _self => {
-    <table>
-      <thead>
-        <tr> <th> {s("Refdomain")} </th> <th> {s("Backlinks")} </th> </tr>
-      </thead>
-      <tbody>
-        <tr> <td> {s("foo.com")} </td> <td> {s("3")} </td> </tr>
-        <tr> <td> {s("bar.com")} </td> <td> {s("6")} </td> </tr>
-      </tbody>
-    </table>;
-  },
+  didMount: self => self.send @@ FetchRefdomains,
+  render: self =>
+    switch (self.state.refdomains) {
+    | NotAsked => RR.string("NotAsked")
+    | Loading => RR.string("Loading")
+    | Failure(err) => RR.string("Failure: " ++ err)
+    | Success(data) =>
+      <table>
+        <thead>
+          <tr>
+            <th> {RR.string("Refdomain")} </th>
+            <th> {RR.string("Backlinks")} </th>
+            <th> {RR.string("First seen")} </th>
+          </tr>
+        </thead>
+        <tbody>
+          data.refdomains
+          ->(
+              List.map(item =>
+                <tr key={item.refdomain}>
+                  <td> {RR.string(item.refdomain)} </td>
+                  <td> {RR.string(string_of_int(item.backlinks))} </td>
+                  <td> {RR.string(item.first_seen)} </td>
+                </tr>
+              )
+            )
+          ->List.toArray
+          ->RR.array
+        </tbody>
+      </table>
+    },
 };
